@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="러닝트래커">
+<meta name="theme-color" content="#080d17">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>하프마라톤 2026</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{background:#080d17;overflow-x:hidden;font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Noto Sans KR',sans-serif}
+button,input,textarea{font-family:inherit}
+::-webkit-scrollbar{display:none}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
+<script type="text/babel" data-presets="react">
+const {useState,useEffect,useMemo}=React;
+
+const TRAINING_START=new Date(2026,3,6);
+const RACE_DATE=new Date(2026,9,18);
+
+// NEW STRUCTURE: Sat=LongRun(fixed), Sun=Rest(fixed), Weight 1x/week
+// Slots are TASKS not days — check any task any day
+const WEEKS=[
+{idx:0, name:"4월 1주", phase:"베이스 빌드",   recov:4, interval:"400m×5", iKm:5,   tempo:5,   longRun:8,    goal:"주간 거리 적응"},
+{idx:1, name:"4월 2주", phase:"베이스 빌드",   recov:4, interval:"400m×5", iKm:5,   tempo:5.5, longRun:9.5,  goal:"롱런 감각 찾기"},
+{idx:2, name:"4월 3주", phase:"베이스 빌드",   recov:5, interval:"500m×4", iKm:5.5, tempo:6,   longRun:10,   goal:"10km 롱런 진입"},
+{idx:3, name:"4월 4주", phase:"베이스 빌드",   recov:5, interval:"500m×4", iKm:5.5, tempo:6,   longRun:11,   goal:"적응 완료"},
+{idx:4, name:"5월 1주", phase:"유산소 확장",   recov:5, interval:"600m×4", iKm:6,   tempo:6.5, longRun:12,   goal:"유산소 역치 자극"},
+{idx:5, name:"5월 2주", phase:"유산소 확장",   recov:5, interval:"600m×4", iKm:6,   tempo:7,   longRun:13,   goal:"템포 거리 확장"},
+{idx:6, name:"5월 3주", phase:"유산소 확장",   recov:5, interval:"600m×4", iKm:6,   tempo:7,   longRun:12,   goal:"🔵 컷백 (회복)"},
+{idx:7, name:"5월 4주", phase:"유산소 확장",   recov:5, interval:"800m×4", iKm:7,   tempo:7.5, longRun:14,   goal:"14km 돌파"},
+{idx:8, name:"6월 1주", phase:"지구력 개발",   recov:5, interval:"800m×4", iKm:7,   tempo:7.5, longRun:15,   goal:"15km 지구력"},
+{idx:9, name:"6월 2주", phase:"지구력 개발",   recov:6, interval:"800m×4", iKm:7,   tempo:8,   longRun:16,   goal:"16km 돌파"},
+{idx:10,name:"6월 3주", phase:"지구력 개발",   recov:5, interval:"600m×4", iKm:6,   tempo:7,   longRun:13,   goal:"🔵 컷백 (회복)"},
+{idx:11,name:"6월 4주", phase:"지구력 개발",   recov:6, interval:"1km×3",  iKm:7,   tempo:8,   longRun:17,   goal:"17km 장거리"},
+{idx:12,name:"7월 1주", phase:"볼륨 증대",     recov:6, interval:"1km×3",  iKm:7,   tempo:8.5, longRun:18,   goal:"18km 돌파"},
+{idx:13,name:"7월 2주", phase:"볼륨 증대",     recov:6, interval:"1km×3",  iKm:7,   tempo:9,   longRun:17,   goal:"템포 9km 유지"},
+{idx:14,name:"7월 3주", phase:"볼륨 증대",     recov:5, interval:"800m×4", iKm:7,   tempo:7,   longRun:14,   goal:"🔵 컷백 (회복)"},
+{idx:15,name:"7월 4주", phase:"볼륨 증대",     recov:6, interval:"1km×4",  iKm:8,   tempo:9,   longRun:19,   goal:"19km 장거리"},
+{idx:16,name:"8월 1주", phase:"피크 볼륨",     recov:6, interval:"1km×4",  iKm:8,   tempo:9.5, longRun:20,   goal:"⭐ 20km 첫 돌파"},
+{idx:17,name:"8월 2주", phase:"피크 볼륨",     recov:6, interval:"1km×4",  iKm:8,   tempo:9.5, longRun:18,   goal:"회복 + 유지"},
+{idx:18,name:"8월 3주", phase:"피크 볼륨",     recov:6, interval:"1.2km×3",iKm:8,   tempo:10,  longRun:20,   goal:"템포 10km·20km"},
+{idx:19,name:"8월 4주", phase:"피크 볼륨",     recov:5, interval:"800m×4", iKm:7,   tempo:7,   longRun:15,   goal:"🔵 컷백 (회복)"},
+{idx:20,name:"9월 1주", phase:"레이스 특화",   recov:6, interval:"1km×5",  iKm:8,   tempo:10,  longRun:19,   goal:"목표 페이스 5:40"},
+{idx:21,name:"9월 2주", phase:"레이스 특화",   recov:6, interval:"1km×5",  iKm:8,   tempo:10,  longRun:20,   goal:"롱런 후반 GP"},
+{idx:22,name:"9월 3주", phase:"레이스 특화",   recov:6, interval:"1.2km×4",iKm:8.5, tempo:10,  longRun:21,   goal:"⭐ 21km 체험"},
+{idx:23,name:"9월 4주", phase:"레이스 특화",   recov:5, interval:"1km×4",  iKm:7,   tempo:8,   longRun:16,   goal:"🔵 피크전 컷백"},
+{idx:24,name:"10월 1주",phase:"테이퍼링",      recov:5, interval:"1km×3",  iKm:7,   tempo:8,   longRun:14,   goal:"테이퍼 1단계"},
+{idx:25,name:"10월 2주",phase:"테이퍼링",      recov:4, interval:"800m×3", iKm:5,   tempo:6,   longRun:11,   goal:"테이퍼 2단계"},
+{idx:26,name:"10월 3주",phase:"테이퍼링",      recov:3, interval:"400m×4", iKm:4,   tempo:5,   longRun:8,    goal:"마지막 조정"},
+{idx:27,name:"10월 4주",phase:"레이스 주간",   recov:3, interval:"400m×2", iKm:3,   tempo:3,   longRun:21.1, goal:"🏆 10.18 레이스"},
+];
+
+// TASKS — same IDs as before (기존 기록 완벽 보존)
+// 구조 변경: 롱런 → 완전휴식(48h) → 인터벌 → 웨이트 → 회복+코어 → 템포 → 휴식
+// 핵심: 롱런↔웨이트 72시간 간격, 롱런 다음날 반드시 휴식
+const TASKS=[
+{id:5,type:"롱런",        icon:"🔥",color:"#ef4444",weight:25,hasDist:true, field:"longRun",sugDay:"월(고정)",desc:"주 최고 강도 · 월요일 고정"},
+{id:6,type:"완전 휴식",   icon:"💤",color:"#475569",weight:5, hasDist:false,field:null,     sugDay:"화(고정)",desc:"롱런 다음날 반드시 휴식 · 비협상"},
+{id:1,type:"인터벌",      icon:"⚡",color:"#f59e0b",weight:20,hasDist:true, field:"iKm",   sugDay:"수",desc:"rep 사이 동일시간 조깅 회복"},
+{id:3,type:"웨이트+코어", icon:"🏋️",color:"#a78bfa",weight:15,hasDist:false,field:null,     sugDay:"목",desc:"런지·불가리안·벤치+코어 (롱런 후 72h)"},
+{id:0,type:"회복런+코어", icon:"🌿",color:"#22c55e",weight:10,hasDist:true, field:"recov", sugDay:"금",desc:"느린 러닝+데드버그·버드독·사이드플랭크"},
+{id:2,type:"템포런",      icon:"🏃",color:"#06b6d4",weight:20,hasDist:true, field:"tempo",  sugDay:"토",desc:"목표 페이스로 일정하게"},
+{id:4,type:"휴식",        icon:"😴",color:"#64748b",weight:5, hasDist:false,field:null,     sugDay:"일",desc:"완전 회복 · 다음날 롱런 준비"},
+];
+
+function pad(n){return String(n).padStart(2,"0")}
+function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x}
+function sameDay(a,b){return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate()}
+function daysBetween(a,b){return Math.round((b-a)/86400000)}
+function dateToWeekIdx(date){const diff=daysBetween(TRAINING_START,date);if(diff<0)return -1;const idx=Math.floor(diff/7);return idx<WEEKS.length?idx:-1}
+function weekStartDate(wi){return addDays(TRAINING_START,wi*7)}
+
+// Pace targets
+function getPace(task,week){
+  const w=week.idx;
+  const ph=w<=7?"e":w<=15?"m":w<=23?"l":"t";
+  if(task.field==="recov") return "6:30~7:00/km";
+  if(task.field==="longRun"){
+    if(ph==="e")return "6:50~7:10/km";
+    if(ph==="m")return "6:40~7:00/km";
+    if(ph==="l")return "6:30~6:50/km · 후반3km 5:50";
+    return "6:30~6:50/km";
+  }
+  if(task.field==="tempo"){
+    if(ph==="e")return "5:50~6:00/km";
+    if(ph==="m")return "5:40~5:50/km";
+    if(ph==="l")return "5:35~5:45/km (목표페이스)";
+    return "5:40~5:50/km";
+  }
+  if(task.field==="iKm"){
+    const i=week.interval;
+    if(i.indexOf("400")===0)return "1:55/rep · 4:50/km";
+    if(i.indexOf("500")===0)return "2:25/rep · 4:50/km";
+    if(i.indexOf("600")===0)return "2:55/rep · 4:55/km";
+    if(i.indexOf("700")===0||i.indexOf("800")===0)return "3:55/rep · 4:55/km";
+    if(i.indexOf("1km")===0)return "5:00/rep · 5:00/km";
+    if(i.indexOf("1.2")===0)return "6:05/rep · 5:05/km";
+    return "~5:00/km";
+  }
+  return null;
+}
+function getTargetPaceNum(task,week){
+  const w=week.idx;
+  const ph=w<=7?"e":w<=15?"m":w<=23?"l":"t";
+  if(task.field==="recov") return 6.75;
+  if(task.field==="longRun") return ph==="e"?7.0:ph==="m"?6.83:6.67;
+  if(task.field==="tempo") return ph==="e"?5.92:ph==="m"?5.75:ph==="l"?5.67:5.75;
+  if(task.field==="iKm"){
+    const i=week.interval;
+    if(i.indexOf("400")===0||i.indexOf("500")===0)return 4.83;
+    if(i.indexOf("600")===0||i.indexOf("700")===0||i.indexOf("800")===0)return 4.92;
+    return 5.0;
+  }
+  return null;
+}
+function parsePace(s){if(!s)return null;s=String(s).trim();if(s.indexOf(":")!==-1){const p=s.split(":");return parseFloat(p[0])+(parseFloat(p[1])||0)/60}const n=parseFloat(s);return isNaN(n)?null:n}
+function fmtPace(n){if(!n)return"";const m=Math.floor(n),s=Math.round((n-m)*60);return `${m}:${pad(s)}`}
+function fmtMin(m){const h=Math.floor(m/60),mm=Math.floor(m%60),ss=Math.round(((m%60)-mm)*60);return `${h}:${pad(mm)}:${pad(ss)}`}
+
+// Quality scoring
+function taskScore(task,week,log){
+  if(!log||!log.done)return 0;
+  if(!task.hasDist)return task.weight;
+  const target=week[task.field];
+  const actual=parseFloat(log.distance);
+  const tp=getTargetPaceNum(task,week);
+  const ap=parsePace(log.pace);
+  let df=1.0;
+  if(actual&&actual>0&&target>0){df=Math.max(Math.min(actual/target,1.0),0.3)}
+  let pf=1.0;
+  if(ap&&tp){const diff=ap-tp;if(diff<=0)pf=1.0;else if(diff<=0.5)pf=1.0-diff*0.6;else if(diff<=1.0)pf=0.7-(diff-0.5)*0.4;else pf=0.4}
+  return task.weight*df*pf;
+}
+function getTaskQuality(task,week,log){
+  if(!log||!log.done)return{status:"미실행",color:"#64748b",pct:0,detail:"",earned:0};
+  if(!task.hasDist)return{status:"완료",color:"#22c55e",pct:100,detail:"",earned:task.weight};
+  const target=week[task.field];
+  const actual=parseFloat(log.distance);
+  const tp=getTargetPaceNum(task,week);
+  const ap=parsePace(log.pace);
+  const earned=taskScore(task,week,log);
+  const pct=Math.round(earned/task.weight*100);
+  let parts=[];
+  if(actual&&actual>0){const dr=Math.round(actual/target*100);parts.push(dr>=100?"거리 ✓":`거리 ${dr}%`)}
+  if(ap&&tp){const diff=ap-tp;parts.push(diff<=0?"페이스 ✓":`페이스 +${fmtPace(diff)} 느림`)}
+  let status,color;
+  if(pct>=90){status="목표 달성";color="#22c55e"}
+  else if(pct>=70){status="거의 달성";color="#06b6d4"}
+  else if(pct>=50){status="부분 달성";color="#f59e0b"}
+  else{status="목표 미달";color="#fb923c"}
+  return{status,color,pct,detail:parts.join(" · "),earned:Math.round(earned*10)/10};
+}
+function weekScore(week,wl){let s=0;TASKS.forEach(t=>{s+=taskScore(t,week,wl&&wl[t.id])});return Math.round(s)}
+function monthScore(mi,all){
+  const mw=WEEKS.filter(w=>Math.floor(w.idx/4)===mi);
+  const a=mw.filter(w=>all[w.idx]&&Object.values(all[w.idx]).some(l=>l.done));
+  if(!a.length)return null;
+  return Math.round(a.reduce((s,w)=>s+weekScore(w,all[w.idx]),0)/a.length);
+}
+function gradeInfo(s){
+  if(s>=90)return{label:"정상",color:"#22c55e"};
+  if(s>=75)return{label:"양호",color:"#06b6d4"};
+  if(s>=60)return{label:"보완",color:"#f59e0b"};
+  if(s>=40)return{label:"미달",color:"#fb923c"};
+  return{label:"저조",color:"#ef4444"};
+}
+
+// Prediction: realistic model
+const BASE_WORST=125.75; // Riegel 57min 10K
+const BASE_BEST=119.0;   // 1:59:00 (1min margin)
+const GOAL_MIN=120.0;
+
+function getFeasibility(logs,today){
+  const now=new Date();
+  const past9pm=now.getHours()>=21;
+  const curWeekIdx=dateToWeekIdx(today);
+  let pastTotal=0,earned=0,missed=0,partial=0,perfect=0;
+  let missedLong=0,missedTempo=0,missedInterval=0,partialLong=0,partialTempo=0;
+  WEEKS.forEach(week=>{
+    if(week.idx>curWeekIdx||(week.idx===curWeekIdx&&!past9pm))return;
+    TASKS.forEach(task=>{
+      if(task.type==="휴식"||task.type==="완전 휴식")return;
+      pastTotal+=task.weight;
+      const log=logs[week.idx]&&logs[week.idx][task.id];
+      const sc=taskScore(task,week,log);
+      earned+=sc;
+      if(!log||!log.done){
+        missed++;
+        if(task.field==="longRun")missedLong++;
+        else if(task.field==="tempo")missedTempo++;
+        else if(task.field==="iKm")missedInterval++;
+      }else if(task.hasDist&&(log.distance||log.pace)){
+        const pct=Math.round(sc/task.weight*100);
+        if(pct>=90)perfect++;else{partial++;if(task.field==="longRun")partialLong++;else if(task.field==="tempo")partialTempo++}
+      }else perfect++;
+    });
+  });
+  const qr=pastTotal>0?earned/pastTotal:1.0;
+  const predicted=BASE_WORST-(BASE_WORST-BASE_BEST)*qr;
+  const feasible=predicted<=GOAL_MIN;
+  const diffMin=predicted-GOAL_MIN;
+  const beforeStart=today<TRAINING_START;
+  return{predicted,feasible,diffMin,qualityRate:qr,missed,partial,perfect,missedLong,missedTempo,missedInterval,partialLong,partialTempo,pastTotal,earned,beforeStart,is9pm:past9pm};
+}
+
+// ICS export — task array order = Mon→Sun
+function generateICS(){
+  const hours=[7,0,7,19,7,7,0];
+  const durs=[120,0,60,60,50,60,0];
+  const L=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//HalfMarathon//KR","CALSCALE:GREGORIAN","METHOD:PUBLISH","X-WR-CALNAME:하프마라톤 2026","X-WR-TIMEZONE:Asia/Seoul","BEGIN:VTIMEZONE","TZID:Asia/Seoul","BEGIN:STANDARD","DTSTART:19700101T000000","TZOFFSETFROM:+0900","TZOFFSETTO:+0900","TZNAME:KST","END:STANDARD","END:VTIMEZONE"];
+  const now=`${new Date().toISOString().replace(/[-:]/g,"").split(".")[0]}Z`;
+  WEEKS.forEach(week=>{
+    TASKS.forEach((task,ti)=>{
+      if(task.type==="휴식"||task.type==="완전 휴식")return;
+      const ws=weekStartDate(week.idx);
+      const d=addDays(ws,ti);
+      const h=hours[ti]||7;
+      const dur=durs[ti]||60;
+      const st=new Date(d.getFullYear(),d.getMonth(),d.getDate(),h,0,0);
+      const en=new Date(st.getTime()+dur*60000);
+      const icsD=x=>`${x.getFullYear()}${pad(x.getMonth()+1)}${pad(x.getDate())}T${pad(x.getHours())}${pad(x.getMinutes())}00`;
+      let sum=`${task.icon} ${task.type}`;
+      let tg="";
+      if(task.field==="recov")tg=`${week.recov}km`;
+      else if(task.field==="iKm")tg=week.interval;
+      else if(task.field==="tempo")tg=`${week.tempo}km`;
+      else if(task.field==="longRun")tg=`${week.longRun}km`;
+      else tg="런지·불가리안·벤치+코어";
+      const pace=getPace(task,week);
+      if(tg)sum+=` ${tg}`;
+      const desc=`${week.name}·${week.phase}\\n목표:${week.goal}${pace?`\\n페이스:${pace}`:""}`;
+      L.push("BEGIN:VEVENT",`UID:hm-w${week.idx}-t${task.id}@hm2026`,`DTSTAMP:${now}`,`DTSTART;TZID=Asia/Seoul:${icsD(st)}`,`DTEND;TZID=Asia/Seoul:${icsD(en)}`,`SUMMARY:${sum}`,`DESCRIPTION:${desc}`,"END:VEVENT");
+    });
+  });
+  const icsD2=x=>`${x.getFullYear()}${pad(x.getMonth()+1)}${pad(x.getDate())}`;
+  L.push("BEGIN:VEVENT",`UID:hm-race@hm2026`,`DTSTAMP:${now}`,`DTSTART;VALUE=DATE:${icsD2(RACE_DATE)}`,`DTEND;VALUE=DATE:${icsD2(addDays(RACE_DATE,1))}`,"SUMMARY:🏆 하프마라톤 대회","DESCRIPTION:21.0975km·목표 2:00:00","END:VEVENT","END:VCALENDAR");
+  return L.join("\r\n");
+}
+function downloadICS(){const b=new Blob([generateICS()],{type:"text/calendar"});const u=URL.createObjectURL(b);const a=document.createElement("a");a.href=u;a.download="half-marathon-2026.ics";document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(()=>URL.revokeObjectURL(u),1e3)}
+
+function load(k){try{return JSON.parse(localStorage.getItem(k))}catch{return null}}
+function save(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}
+
+// ═══ APP ═══
+function App(){
+  const [tab,setTab]=useState("quick");
+  const [logs,setLogs]=useState(()=>load("hm-v7")||{});
+  const [tick,setTick]=useState(0);
+  useEffect(()=>{save("hm-v7",logs)},[logs]);
+  useEffect(()=>{const t=setInterval(()=>setTick(x=>x+1),60000);return()=>clearInterval(t)},[]);
+
+  const today=new Date();
+  const daysLeft=daysBetween(today,RACE_DATE);
+  const curWI=Math.max(0,dateToWeekIdx(today));
+  const feas=useMemo(()=>getFeasibility(logs,today),[logs,tick]);
+
+  const updateTask=(wi,tid,patch)=>{setLogs(p=>{const wl=p[wi]||{};const sl=wl[tid]||{done:false,distance:"",pace:"",note:""};return{...p,[wi]:{...wl,[tid]:{...sl,...patch}}}})};
+
+  const tabs=[{id:"quick",label:"기록",icon:"⊕"},{id:"week",label:"이번주",icon:"✓"},{id:"score",label:"점수",icon:"◈"}];
+
+  return (
+    <div style={S.app}>
+      <div style={S.banner}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end"}}>
+          <div>
+            <div style={{color:"#64748b",fontSize:9,letterSpacing:"0.12em",fontWeight:800}}>RACE DAY · 2026.10.18 (일)</div>
+            <div style={{color:"#f1f5f9",fontSize:14,fontWeight:800,marginTop:2}}>하프마라톤 대회</div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <div style={{display:"flex",alignItems:"baseline",gap:3,justifyContent:"flex-end"}}>
+              <span style={{color:daysLeft<=14?"#f59e0b":"#67e8f9",fontSize:13,fontWeight:700}}>D-</span>
+              <span style={{color:daysLeft<=14?"#f59e0b":"#67e8f9",fontSize:30,fontWeight:900,lineHeight:1,fontFamily:"ui-monospace,monospace"}}>{Math.max(0,daysLeft)}</span>
+            </div>
+            <div style={{color:"#64748b",fontSize:10,marginTop:2,fontWeight:600}}>약 {Math.ceil(daysLeft/7)}주 남음</div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{padding:"10px 12px 0"}}><FeasBanner f={feas}/></div>
+
+      <div style={S.nav}>
+        {tabs.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)} style={{...S.navBtn,...(tab===t.id?S.navActive:{})}}>
+            <span style={{fontSize:15,fontWeight:900}}>{t.icon}</span>
+            <span style={{fontSize:10,fontWeight:700}}>{t.label}</span>
+          </button>
+        ))}
+      </div>
+
+      <div style={S.content}>
+        {tab==="quick"&&<QuickLog logs={logs} curWI={curWI} onUpdate={updateTask}/>}
+        {tab==="week"&&<WeekTab logs={logs} curWI={curWI} onUpdate={updateTask} today={today} onExport={downloadICS}/>}
+        {tab==="score"&&<ScoreTab logs={logs} curWI={curWI} feas={feas}/>}
+      </div>
+    </div>
+  );
+}
+
+// ═══ FEASIBILITY BANNER ═══
+function FeasBanner({f}){
+  if(f.beforeStart)return(
+    <div style={{...S.feasBox,borderColor:"rgba(100,116,139,0.3)",background:"rgba(100,116,139,0.05)"}}>
+      <div style={{color:"#94a3b8",fontSize:12,fontWeight:700}}>훈련 시작 대기 중 · 4.6(월) 시작</div>
+    </div>
+  );
+  const col=f.feasible?"#22c55e":"#ef4444";
+  return(
+    <div style={{...S.feasBox,borderColor:`${col}50`,background:`${col}08`}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
+        <span style={{color:"#64748b",fontSize:9,fontWeight:800,letterSpacing:"0.1em"}}>SUB-2 목표 {f.is9pm&&<span style={{color:"#f59e0b"}}>· 21:00</span>}</span>
+        <span style={{color:col,fontSize:10,fontWeight:800,padding:"2px 7px",borderRadius:4,background:`${col}15`,border:`1px solid ${col}30`}}>
+          {f.feasible?"✓ 가능":"✕ 불가능"}
+        </span>
+      </div>
+      <div style={{display:"flex",alignItems:"baseline",gap:8}}>
+        <span style={{color:col,fontSize:22,fontWeight:900,fontFamily:"ui-monospace,monospace"}}>{fmtMin(f.predicted)}</span>
+        <span style={{color:col,fontSize:11,fontWeight:800,fontFamily:"ui-monospace,monospace"}}>
+          {f.feasible?`(${fmtPace(Math.abs(f.diffMin))} 여유)`:`(+${fmtPace(f.diffMin)} 초과)`}
+        </span>
+      </div>
+      <div style={{display:"flex",gap:6,marginTop:5,fontSize:10,color:"#94a3b8",flexWrap:"wrap"}}>
+        <span>품질 <b style={{color:"#cbd5e1"}}>{Math.round(f.qualityRate*100)}%</b></span>
+        {f.perfect>0&&<span style={{color:"#22c55e"}}>완벽{f.perfect}</span>}
+        {f.partial>0&&<span style={{color:"#f59e0b"}}>부분{f.partial}</span>}
+        {f.missed>0&&<span style={{color:"#fca5a5"}}>미실행{f.missed}</span>}
+      </div>
+      {!f.feasible&&f.missed>0&&(
+        <div style={{marginTop:6,paddingTop:6,borderTop:`1px solid ${col}20`,fontSize:10,color:"#fca5a5",fontWeight:600}}>
+          💡 {f.missedLong>0?"롱런이 가장 치명적 — 최우선 채우세요":f.missedTempo>0?"템포런이 목표 페이스를 만듭니다":"빠짐없이 채우세요"}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══ QUICK LOG ═══
+function QuickLog({logs,curWI,onUpdate}){
+  const week=WEEKS[curWI];
+  const wl=logs[curWI]||{};
+  const unchecked=TASKS.filter(t=>!wl[t.id]?.done&&t.type!=="휴식"&&t.type!=="완전 휴식");
+  const allDone=unchecked.length===0;
+  const [sel,setSel]=useState(null);
+  const [dist,setDist]=useState("");
+  const [pace,setPace]=useState("");
+  const [note,setNote]=useState("");
+  const [saved,setSaved]=useState(false);
+
+  const active=sel||(unchecked[0])||null;
+
+  const doSave=()=>{
+    if(!active)return;
+    onUpdate(curWI,active.id,{done:true,distance:dist,pace:pace,note:note,ts:Date.now()});
+    setSaved(true);
+    setTimeout(()=>{setSaved(false);setDist("");setPace("");setNote("");setSel(null)},1200);
+  };
+  const doSkip=()=>{
+    if(!active)return;
+    onUpdate(curWI,active.id,{done:true,ts:Date.now()});
+    setSel(null);setDist("");setPace("");setNote("");
+  };
+
+  if(!week)return <div style={{color:"#94a3b8",textAlign:"center",padding:40}}>훈련 기간이 아닙니다</div>;
+
+  let targetDist="",targetPace="";
+  if(active){
+    if(active.field==="recov")targetDist=`${week.recov}km`;
+    else if(active.field==="iKm")targetDist=`${week.interval} · ${week.iKm}km`;
+    else if(active.field==="tempo")targetDist=`${week.tempo}km`;
+    else if(active.field==="longRun")targetDist=`${week.longRun}km`;
+    else targetDist="런지·불가리안·벤치+코어";
+    targetPace=getPace(active,week)||"";
+  }
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{textAlign:"center"}}>
+        <div style={{color:"#64748b",fontSize:10,fontWeight:700,letterSpacing:"0.08em"}}>{week.name} · {week.phase}</div>
+        <div style={{color:"#f1f5f9",fontSize:13,fontWeight:700,marginTop:2}}>{week.goal}</div>
+      </div>
+
+      <div style={S.infoCard}>
+        <div style={{color:"#64748b",fontSize:10,lineHeight:1.5,textAlign:"center"}}>
+          아무 요일에 아무 훈련을 완료해도 <span style={{color:"#67e8f9",fontWeight:700}}>점수에 반영</span>됩니다<br/>
+          <span style={{color:"#94a3b8"}}>토요일 롱런 · 일요일 휴식만 고정</span>
+        </div>
+      </div>
+
+      {allDone?(
+        <div style={{...S.card,textAlign:"center",padding:30}}>
+          <div style={{fontSize:40,marginBottom:8}}>🎉</div>
+          <div style={{color:"#22c55e",fontSize:16,fontWeight:800}}>이번 주 훈련 완료!</div>
+        </div>
+      ):(
+        <React.Fragment>
+          <div style={{color:"#64748b",fontSize:10,fontWeight:700}}>어떤 훈련을 했나요?</div>
+          <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:4}}>
+            {TASKS.filter(t=>t.type!=="완전 휴식").map(t=>{
+              const done=wl[t.id]?.done;
+              const isSel=active&&active.id===t.id;
+              return(
+                <button key={t.id} onClick={()=>{setSel(t);setDist("");setPace("");setNote("")}}
+                  disabled={done}
+                  style={{padding:"8px 10px",borderRadius:10,border:`2px solid ${isSel?t.color:done?"rgba(34,197,94,0.3)":"rgba(255,255,255,0.08)"}`,
+                    background:isSel?`${t.color}18`:done?"rgba(34,197,94,0.06)":"rgba(255,255,255,0.03)",
+                    cursor:done?"default":"pointer",opacity:done?0.5:1,
+                    display:"flex",flexDirection:"column",alignItems:"center",gap:3,minWidth:56}}>
+                  <span style={{fontSize:16}}>{done?"✓":t.icon}</span>
+                  <span style={{color:isSel?t.color:done?"#22c55e":"#94a3b8",fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>{t.type.split("+")[0]}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {active&&(
+            <div style={{...S.card,borderLeft:`4px solid ${active.color}`}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                <span style={{fontSize:26}}>{active.icon}</span>
+                <div style={{flex:1}}>
+                  <div style={{color:active.color,fontSize:16,fontWeight:800}}>{active.type}</div>
+                  <div style={{color:"#94a3b8",fontSize:11,marginTop:1}}>목표: {targetDist}</div>
+                  {targetPace&&<div style={{color:active.color,fontSize:10,fontWeight:700,marginTop:2,fontFamily:"ui-monospace,monospace"}}>🏁 {targetPace}</div>}
+                </div>
+              </div>
+              <div style={{color:"#475569",fontSize:10,marginBottom:10,fontStyle:"italic"}}>{active.desc} · 추천: {active.sugDay}</div>
+
+              {active.hasDist&&(
+                <React.Fragment>
+                  <div style={{marginBottom:10}}>
+                    <div style={{color:"#cbd5e1",fontSize:11,fontWeight:700,marginBottom:4}}>실제 거리 (km)</div>
+                    <input type="number" step="0.1" value={dist} onChange={e=>setDist(e.target.value)}
+                      style={{...S.qInput,borderColor:`${active.color}50`}}
+                      placeholder={active.field?`목표: ${week[active.field]}km`:"km"}/>
+                  </div>
+                  <div style={{marginBottom:10}}>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                      <span style={{color:"#cbd5e1",fontSize:11,fontWeight:700}}>평균 페이스 (분:초/km)</span>
+                      {getTargetPaceNum(active,week)&&<span style={{color:"#64748b",fontSize:10}}>목표: {fmtPace(getTargetPaceNum(active,week))}</span>}
+                    </div>
+                    <input type="text" inputMode="decimal" value={pace} onChange={e=>setPace(e.target.value)}
+                      style={{...S.qInput,borderColor:`${active.color}50`}} placeholder="예: 6:30"/>
+                  </div>
+                </React.Fragment>
+              )}
+              <div style={{marginBottom:12}}>
+                <div style={{color:"#cbd5e1",fontSize:11,fontWeight:700,marginBottom:4}}>메모 (선택)</div>
+                <input type="text" value={note} onChange={e=>setNote(e.target.value)}
+                  style={{...S.qInput,borderColor:"rgba(255,255,255,0.1)"}} placeholder="컨디션, 통증, 날씨..."/>
+              </div>
+
+              {(dist||pace)&&active.hasDist&&(()=>{
+                const q=getTaskQuality(active,week,{done:true,distance:dist,pace:pace});
+                return(
+                  <div style={{padding:"8px 10px",borderRadius:8,background:`${q.color}12`,border:`1px solid ${q.color}25`,marginBottom:12}}>
+                    <div style={{display:"flex",justifyContent:"space-between"}}>
+                      <span style={{color:q.color,fontSize:11,fontWeight:800}}>{q.status} {q.pct}%</span>
+                      <span style={{color:q.color,fontSize:11,fontWeight:800,fontFamily:"ui-monospace,monospace"}}>{q.earned}/{active.weight}pt</span>
+                    </div>
+                    {q.detail&&<div style={{color:"#94a3b8",fontSize:10,marginTop:3}}>{q.detail}</div>}
+                  </div>
+                );
+              })()}
+
+              {saved?(
+                <div style={{textAlign:"center",padding:"14px 0"}}>
+                  <span style={{color:"#22c55e",fontSize:18,fontWeight:900}}>✓ 저장 완료!</span>
+                </div>
+              ):(
+                <React.Fragment>
+                  <button onClick={doSave} style={{...S.qSaveBtn,background:`linear-gradient(135deg,${active.color}cc,${active.color})`}}>💾 기록 저장</button>
+                  {active.hasDist&&!dist&&!pace&&(
+                    <button onClick={doSkip} style={S.qSkipBtn}>거리·페이스 없이 완료만 체크</button>
+                  )}
+                  {!active.hasDist&&(
+                    <button onClick={doSave} style={{...S.qSaveBtn,background:`linear-gradient(135deg,${active.color}cc,${active.color})`}}>✓ 완료 체크</button>
+                  )}
+                </React.Fragment>
+              )}
+            </div>
+          )}
+        </React.Fragment>
+      )}
+
+      {Object.keys(wl).length>0&&(
+        <div style={S.card}>
+          <div style={{color:"#64748b",fontSize:10,fontWeight:700,marginBottom:8}}>이번 주 기록</div>
+          {TASKS.filter(t=>wl[t.id]?.done).map(t=>{
+            const log=wl[t.id];
+            const q=t.hasDist&&(log.distance||log.pace)?getTaskQuality(t,week,log):null;
+            return(
+              <div key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 8px",borderRadius:6,background:"rgba(255,255,255,0.02)",marginBottom:3}}>
+                <span style={{fontSize:13}}>{t.icon}</span>
+                <span style={{color:t.color,fontSize:11,fontWeight:700,flex:1}}>{t.type.split("+")[0]}</span>
+                {log.distance&&<span style={{color:"#94a3b8",fontSize:10}}>{log.distance}km</span>}
+                {log.pace&&<span style={{color:"#94a3b8",fontSize:10}}>{log.pace}/km</span>}
+                {q&&<span style={{color:q.color,fontSize:10,fontWeight:800,fontFamily:"ui-monospace,monospace"}}>{q.pct}%</span>}
+                {!q&&<span style={{color:"#22c55e",fontSize:10}}>✓</span>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══ WEEK TAB ═══
+function WeekTab({logs,curWI,onUpdate,today,onExport}){
+  const [sel,setSel]=useState(curWI);
+  const week=WEEKS[sel];
+  const wl=logs[sel]||{};
+  const score=weekScore(week,wl);
+  const grade=gradeInfo(score);
+  const doneCount=TASKS.filter(t=>wl[t.id]?.done).length;
+  const ws=weekStartDate(sel),we=addDays(ws,6);
+  const rng=`${ws.getMonth()+1}/${ws.getDate()} – ${we.getMonth()+1}/${we.getDate()}`;
+
+  const toggle=(tid)=>{
+    const log=wl[tid]||{};
+    onUpdate(sel,tid,{done:!log.done,ts:Date.now()});
+  };
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      <div style={S.weekNav}>
+        <button onClick={()=>sel>0&&setSel(sel-1)} style={{...S.navArrow,opacity:sel===0?0.25:1}}>‹</button>
+        <div style={{flex:1,textAlign:"center"}}>
+          <div style={{color:"#f1f5f9",fontSize:16,fontWeight:800}}>{week.name}</div>
+          <div style={{color:"#64748b",fontSize:10,fontWeight:600,marginTop:2,fontFamily:"ui-monospace,monospace"}}>{rng}</div>
+        </div>
+        <button onClick={()=>sel<WEEKS.length-1&&setSel(sel+1)} style={{...S.navArrow,opacity:sel===WEEKS.length-1?0.25:1}}>›</button>
+      </div>
+
+      {sel!==curWI&&<button onClick={()=>setSel(curWI)} style={S.jumpBtn}>↩ 이번 주로 이동</button>}
+
+      <div style={S.card}>
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          <ScoreGauge score={score} color={grade.color} size={80}/>
+          <div style={{flex:1}}>
+            <div style={{color:"#67e8f9",fontSize:11,fontWeight:700}}>{week.phase}</div>
+            <div style={{color:"#f1f5f9",fontSize:12,fontWeight:700,marginTop:2}}>{week.goal}</div>
+            <div style={{marginTop:6,display:"flex",gap:8}}>
+              <span style={{color:grade.color,fontSize:11,fontWeight:800}}>{grade.label}</span>
+              <span style={{color:"#475569",fontSize:10}}>{doneCount}/7 완료</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{display:"flex",flexDirection:"column",gap:7}}>
+        {TASKS.map(task=>{
+          const log=wl[task.id];
+          const done=log?.done;
+          let target="";
+          if(task.field==="recov")target=`${week.recov}km`;
+          else if(task.field==="iKm")target=week.interval;
+          else if(task.field==="tempo")target=`${week.tempo}km`;
+          else if(task.field==="longRun")target=`${week.longRun}km`;
+          else if(task.type.indexOf("웨이트")===0)target="런지·불가리안+코어";
+          else target="완전 회복";
+          const pace=getPace(task,week);
+          const q=done&&task.hasDist&&(log?.distance||log?.pace)?getTaskQuality(task,week,log):null;
+          return(
+            <div key={task.id} onClick={()=>toggle(task.id)} style={{...S.taskCard,borderLeft:`3px solid ${done?task.color:"rgba(255,255,255,0.06)"}`}}>
+              <div style={{...S.checkSm,background:done?task.color:"transparent",borderColor:done?task.color:"rgba(255,255,255,0.15)"}}>
+                {done&&<span style={{color:"#fff",fontSize:14,fontWeight:900}}>✓</span>}
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
+                  <span style={{fontSize:13}}>{task.icon}</span>
+                  <span style={{color:done?task.color:"#cbd5e1",fontSize:12,fontWeight:800}}>{task.type}</span>
+                  <span style={{color:"#64748b",fontSize:9,fontWeight:600}}>{task.sugDay}</span>
+                  <span style={{color:"#475569",fontSize:9,fontWeight:700,marginLeft:"auto"}}>{task.weight}pt</span>
+                </div>
+                <div style={{color:"#64748b",fontSize:10,marginTop:1}}>{target}</div>
+                {pace&&<div style={{color:task.color,fontSize:9,marginTop:2,fontWeight:700,fontFamily:"ui-monospace,monospace",opacity:0.85}}>🏁 {pace}</div>}
+                {q&&<div style={{marginTop:3,fontSize:9}}>
+                  <span style={{color:q.color,fontWeight:800}}>{q.status} {q.pct}%</span>
+                  <span style={{color:"#475569",marginLeft:6}}>{q.earned}/{task.weight}pt</span>
+                  {q.detail&&<span style={{color:"#64748b",marginLeft:6}}>{q.detail}</span>}
+                </div>}
+                {done&&task.hasDist&&!log?.distance&&!log?.pace&&(
+                  <div style={{marginTop:3,color:"#475569",fontSize:9,fontStyle:"italic"}}>기록 탭에서 거리·페이스 입력</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <button onClick={onExport} style={S.exportBtn}>
+        <span style={{fontSize:18}}>📅</span>
+        <div style={{flex:1,textAlign:"left"}}>
+          <div style={{color:"#f1f5f9",fontSize:13,fontWeight:800}}>캘린더에 전체 일정 추가</div>
+          <div style={{color:"#94a3b8",fontSize:10,marginTop:1}}>.ics 다운로드 → 아이폰 캘린더에서 열기</div>
+        </div>
+        <span style={{color:"#06b6d4",fontSize:20,fontWeight:900}}>↓</span>
+      </button>
+
+      <div style={S.infoCard}>
+        <div style={{color:"#64748b",fontSize:9,fontWeight:800,letterSpacing:"0.08em",marginBottom:6}}>새 구조</div>
+        <div style={{color:"#94a3b8",fontSize:10,lineHeight:1.6}}>
+          <b style={{color:"#ef4444"}}>토요일 롱런</b> + <b style={{color:"#475569"}}>일요일 완전 휴식</b> 고정<br/>
+          나머지 5일은 자유롭게 배분<br/>
+          웨이트 주 1회 + 코어 안정화 주 2회<br/>
+          <b style={{color:"#f59e0b"}}>어떤 요일에 해도 점수에 반영</b>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══ SCORE TAB ═══
+function ScoreTab({logs,curWI,feas}){
+  const weeklyData=useMemo(()=>WEEKS.map(w=>{
+    const wl=logs[w.idx]||{};
+    const hasAny=Object.values(wl).some(l=>l.done);
+    return{week:w,score:weekScore(w,wl),hasAny};
+  }),[logs]);
+  const active=weeklyData.filter(w=>w.hasAny);
+  const avg=active.length>0?Math.round(active.reduce((s,w)=>s+w.score,0)/active.length):0;
+  const MI=[{i:0,l:"4월"},{i:1,l:"5월"},{i:2,l:"6월"},{i:3,l:"7월"},{i:4,l:"8월"},{i:5,l:"9월"},{i:6,l:"10월"}];
+  const predCol=feas.feasible?"#22c55e":"#ef4444";
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      <div style={{...S.card,background:`${predCol}08`,border:`1px solid ${predCol}30`}}>
+        <div style={{color:"#64748b",fontSize:9,fontWeight:800,letterSpacing:"0.1em",marginBottom:4}}>예상 기록 · 21.0975 KM</div>
+        <div style={{fontSize:34,fontWeight:900,color:predCol,fontFamily:"ui-monospace,monospace",letterSpacing:"-0.02em",lineHeight:1}}>{fmtMin(feas.predicted)}</div>
+        <div style={{marginTop:8,display:"flex",justifyContent:"space-between",fontSize:10}}>
+          <span style={{color:"#94a3b8"}}>목표 <b style={{color:"#f1f5f9"}}>2:00:00</b> 대비 {feas.feasible?<span style={{color:"#22c55e",fontWeight:700}}>✓ {fmtPace(Math.abs(feas.diffMin))} 여유</span>:<span style={{color:"#ef4444",fontWeight:700}}>+{fmtPace(feas.diffMin)} 초과</span>}</span>
+          <span style={{color:"#64748b"}}>품질 {Math.round(feas.qualityRate*100)}%</span>
+        </div>
+      </div>
+      {active.length>0&&(
+        <div style={S.card}>
+          <div style={{display:"flex",alignItems:"center",gap:14}}>
+            <ScoreGauge score={avg} color={gradeInfo(avg).color} size={76}/>
+            <div style={{flex:1}}>
+              <div style={{color:"#64748b",fontSize:9,fontWeight:800,letterSpacing:"0.08em"}}>TRAINING AVG</div>
+              <div style={{color:"#f1f5f9",fontSize:22,fontWeight:900,marginTop:2,fontFamily:"ui-monospace,monospace",lineHeight:1}}>
+                {avg}<span style={{color:"#64748b",fontSize:13,fontWeight:700}}>/100</span>
+              </div>
+              <div style={{color:"#94a3b8",fontSize:10,marginTop:3}}>활성 {active.length}/{WEEKS.length}주 · {gradeInfo(avg).label}</div>
+            </div>
+          </div>
+        </div>
+      )}
+      <div style={S.card}>
+        <div style={{color:"#64748b",fontSize:9,fontWeight:800,letterSpacing:"0.08em",marginBottom:10}}>MONTHLY</div>
+        {MI.map(m=>{
+          const sc=monthScore(m.i,logs);
+          const gr=sc!==null?gradeInfo(sc):null;
+          return(
+            <div key={m.i} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 10px",background:"rgba(255,255,255,0.02)",borderRadius:7,marginBottom:4}}>
+              <div style={{width:30,color:"#cbd5e1",fontSize:11,fontWeight:800}}>{m.l}</div>
+              <div style={{flex:1,height:5,background:"rgba(255,255,255,0.05)",borderRadius:3,overflow:"hidden"}}>
+                {sc!==null&&<div style={{height:"100%",width:`${sc}%`,background:gr.color,borderRadius:3}}/>}
+              </div>
+              <div style={{width:30,textAlign:"right",fontSize:12,fontWeight:800,color:gr?.color||"#334155",fontFamily:"ui-monospace,monospace"}}>{sc!==null?sc:"—"}</div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={S.card}>
+        <div style={{color:"#64748b",fontSize:9,fontWeight:800,letterSpacing:"0.08em",marginBottom:10}}>WEEKLY · 28W</div>
+        <div style={{display:"flex",gap:2,alignItems:"flex-end",height:56}}>
+          {weeklyData.map((wd,i)=>{
+            const h=wd.hasAny?Math.max(wd.score*0.55,4):4;
+            const gr=wd.hasAny?gradeInfo(wd.score):null;
+            return <div key={i} style={{flex:1,height:h,background:wd.hasAny?gr.color:"rgba(255,255,255,0.06)",borderRadius:"2px 2px 0 0",outline:i===curWI?"1px solid #67e8f9":"none",boxShadow:i===curWI?"0 0 6px rgba(103,232,249,0.5)":"none"}}/>;
+          })}
+        </div>
+      </div>
+      <div style={S.infoCard}>
+        <div style={{color:"#64748b",fontSize:9,fontWeight:800,letterSpacing:"0.08em",marginBottom:7}}>SCORING (100PT)</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4,fontSize:10}}>
+          {TASKS.map(t=>(
+            <div key={t.id} style={{display:"flex",alignItems:"center",gap:5}}>
+              <span style={{fontSize:11,width:14}}>{t.icon}</span>
+              <span style={{color:"#94a3b8",flex:1,fontWeight:500}}>{t.type.split("+")[0]}</span>
+              <span style={{color:t.color,fontWeight:800,fontFamily:"ui-monospace,monospace"}}>{t.weight}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ScoreGauge({score,color,size}){
+  const r=size/2-5,c=2*Math.PI*r,off=c-(score/100)*c;
+  return(
+    <svg width={size} height={size} style={{flexShrink:0}}>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="5"/>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth="5" strokeDasharray={c} strokeDashoffset={off} strokeLinecap="round" transform={`rotate(-90 ${size/2} ${size/2})`} style={{transition:"stroke-dashoffset 0.5s"}}/>
+      <text x="50%" y="50%" dy="0.35em" textAnchor="middle" fill={color} style={{fontSize:22,fontWeight:900,fontFamily:"ui-monospace,monospace"}}>{score}</text>
+    </svg>
+  );
+}
+
+const S={
+  app:{background:"#080d17",minHeight:"100vh",maxWidth:480,margin:"0 auto",display:"flex",flexDirection:"column",color:"#f1f5f9",paddingTop:"env(safe-area-inset-top)",paddingBottom:"env(safe-area-inset-bottom)"},
+  banner:{padding:"14px 18px 12px",background:"linear-gradient(135deg,#0a1220,#0f1a2e)",borderBottom:"1px solid rgba(255,255,255,0.05)"},
+  feasBox:{borderRadius:11,padding:"11px 13px",border:"1px solid"},
+  nav:{display:"flex",background:"#0a1220",borderBottom:"1px solid rgba(255,255,255,0.05)",position:"sticky",top:0,zIndex:10},
+  navBtn:{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,padding:"10px 0",background:"none",border:"none",color:"#475569",cursor:"pointer",borderBottom:"2px solid transparent"},
+  navActive:{color:"#67e8f9",borderBottomColor:"#06b6d4",background:"rgba(6,182,212,0.04)"},
+  content:{flex:1,padding:12,paddingBottom:28},
+  card:{background:"rgba(255,255,255,0.025)",borderRadius:12,padding:14,border:"1px solid rgba(255,255,255,0.05)"},
+  infoCard:{background:"rgba(255,255,255,0.015)",borderRadius:10,padding:"10px 12px",border:"1px solid rgba(255,255,255,0.04)"},
+  weekNav:{display:"flex",alignItems:"center",gap:6},
+  navArrow:{width:34,height:34,borderRadius:9,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.06)",color:"#94a3b8",fontSize:18,cursor:"pointer",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"},
+  jumpBtn:{padding:"7px 12px",background:"rgba(6,182,212,0.1)",border:"1px solid rgba(6,182,212,0.25)",borderRadius:8,color:"#67e8f9",fontSize:11,fontWeight:700,cursor:"pointer",alignSelf:"center"},
+  taskCard:{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:"rgba(255,255,255,0.025)",borderRadius:10,border:"1px solid rgba(255,255,255,0.05)",cursor:"pointer"},
+  checkSm:{width:22,height:22,borderRadius:6,border:"2px solid rgba(255,255,255,0.15)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0},
+  exportBtn:{display:"flex",alignItems:"center",gap:12,padding:"14px 16px",background:"linear-gradient(135deg,rgba(6,182,212,0.12),rgba(6,182,212,0.04))",border:"1px solid rgba(6,182,212,0.25)",borderRadius:12,cursor:"pointer",width:"100%"},
+  qInput:{width:"100%",padding:"14px 16px",background:"rgba(255,255,255,0.04)",border:"1.5px solid rgba(255,255,255,0.12)",borderRadius:12,color:"#f1f5f9",fontSize:16,outline:"none",boxSizing:"border-box",fontWeight:600},
+  qSaveBtn:{width:"100%",padding:"16px 0",border:"none",borderRadius:14,color:"#fff",fontSize:16,fontWeight:800,cursor:"pointer"},
+  qSkipBtn:{width:"100%",padding:"12px 0",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,color:"#94a3b8",fontSize:12,fontWeight:600,cursor:"pointer",marginTop:6},
+};
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(()=>{})}
+</script>
+</body>
+</html>
