@@ -61,17 +61,16 @@ const WEEKS=[
 {idx:27,name:"10월 4주",phase:"레이스 주간",   recov:3, interval:"400m×2", iKm:3,   tempo:3,   longRun:21.1, goal:"🏆 10.18 레이스"},
 ];
 
-// TASKS — same IDs as before (기존 기록 완벽 보존)
-// 구조 변경: 롱런 → 완전휴식(48h) → 인터벌 → 웨이트 → 회복+코어 → 템포 → 휴식
-// 핵심: 롱런↔웨이트 72시간 간격, 롱런 다음날 반드시 휴식
+// 구조: 토=롱런(고정) · 일=완전휴식(고정) · 웨이트↔롱런 72h
+// 배열순서 = 월→일 (ICS 요일 매핑용)
 const TASKS=[
-{id:5,type:"롱런",        icon:"🔥",color:"#ef4444",weight:25,hasDist:true, field:"longRun",sugDay:"월(고정)",desc:"주 최고 강도 · 월요일 고정"},
-{id:6,type:"완전 휴식",   icon:"💤",color:"#475569",weight:5, hasDist:false,field:null,     sugDay:"화(고정)",desc:"롱런 다음날 반드시 휴식 · 비협상"},
-{id:1,type:"인터벌",      icon:"⚡",color:"#f59e0b",weight:20,hasDist:true, field:"iKm",   sugDay:"수",desc:"rep 사이 동일시간 조깅 회복"},
-{id:3,type:"웨이트+코어", icon:"🏋️",color:"#a78bfa",weight:15,hasDist:false,field:null,     sugDay:"목",desc:"런지·불가리안·벤치+코어 (롱런 후 72h)"},
-{id:0,type:"회복런+코어", icon:"🌿",color:"#22c55e",weight:10,hasDist:true, field:"recov", sugDay:"금",desc:"느린 러닝+데드버그·버드독·사이드플랭크"},
-{id:2,type:"템포런",      icon:"🏃",color:"#06b6d4",weight:20,hasDist:true, field:"tempo",  sugDay:"토",desc:"목표 페이스로 일정하게"},
-{id:4,type:"휴식",        icon:"😴",color:"#64748b",weight:5, hasDist:false,field:null,     sugDay:"일",desc:"완전 회복 · 다음날 롱런 준비"},
+{id:0,type:"회복런+코어", icon:"🌿",color:"#22c55e",weight:10,hasDist:true, field:"recov", sugDay:"월",desc:"느린 러닝+데드버그·버드독·사이드플랭크"},
+{id:1,type:"인터벌",      icon:"⚡",color:"#f59e0b",weight:20,hasDist:true, field:"iKm",   sugDay:"화",desc:"rep 사이 동일시간 조깅 회복"},
+{id:3,type:"웨이트+코어", icon:"🏋️",color:"#a78bfa",weight:15,hasDist:false,field:null,     sugDay:"수",desc:"런지·불가리안·벤치+코어 (롱런까지 72h)"},
+{id:2,type:"템포런",      icon:"🏃",color:"#06b6d4",weight:20,hasDist:true, field:"tempo",  sugDay:"목",desc:"목표 페이스로 일정하게"},
+{id:4,type:"휴식",        icon:"😴",color:"#64748b",weight:5, hasDist:false,field:null,     sugDay:"금",desc:"롱런 전날 · 다리 회복"},
+{id:5,type:"롱런",        icon:"🔥",color:"#ef4444",weight:25,hasDist:true, field:"longRun",sugDay:"토(고정)",desc:"토요일 고정 · 주 최고 강도"},
+{id:6,type:"완전 휴식",   icon:"💤",color:"#475569",weight:5, hasDist:false,field:null,     sugDay:"일(고정)",desc:"일요일 고정 · 롱런 후 반드시 휴식"},
 ];
 
 function pad(n){return String(n).padStart(2,"0")}
@@ -216,8 +215,8 @@ function getFeasibility(logs,today){
 
 // ICS export — task array order = Mon→Sun
 function generateICS(){
-  const hours=[7,0,7,19,7,7,0];
-  const durs=[120,0,60,60,50,60,0];
+  const hours=[7,7,19,7,0,7,0];
+  const durs=[50,60,60,60,0,120,0];
   const L=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//HalfMarathon//KR","CALSCALE:GREGORIAN","METHOD:PUBLISH","X-WR-CALNAME:하프마라톤 2026","X-WR-TIMEZONE:Asia/Seoul","BEGIN:VTIMEZONE","TZID:Asia/Seoul","BEGIN:STANDARD","DTSTART:19700101T000000","TZOFFSETFROM:+0900","TZOFFSETTO:+0900","TZNAME:KST","END:STANDARD","END:VTIMEZONE"];
   const now=`${new Date().toISOString().replace(/[-:]/g,"").split(".")[0]}Z`;
   WEEKS.forEach(week=>{
