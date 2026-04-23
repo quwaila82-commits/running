@@ -267,7 +267,7 @@ function App(){
 
   const updateTask=(wi,tid,patch)=>{setLogs(p=>{const wl=p[wi]||{};const sl=wl[tid]||{done:false,distance:"",pace:"",note:""};return{...p,[wi]:{...wl,[tid]:{...sl,...patch}}}})};
 
-  const tabs=[{id:"quick",label:"기록",icon:"⊕"},{id:"week",label:"이번주",icon:"✓"},{id:"score",label:"점수",icon:"◈"}];
+  const tabs=[{id:"quick",label:"기록",icon:"⊕"},{id:"cal",label:"캘린더",icon:"▦"},{id:"week",label:"이번주",icon:"✓"},{id:"score",label:"점수",icon:"◈"}];
 
   return (
     <div style={S.app}>
@@ -300,6 +300,7 @@ function App(){
 
       <div style={S.content}>
         {tab==="quick"&&<QuickLog logs={logs} curWI={curWI} onUpdate={updateTask}/>}
+        {tab==="cal"&&<CalendarTab logs={logs} today={today} onUpdate={updateTask}/>}
         {tab==="week"&&<WeekTab logs={logs} curWI={curWI} onUpdate={updateTask} today={today} onExport={downloadICS}/>}
         {tab==="score"&&<ScoreTab logs={logs} curWI={curWI} feas={feas}/>}
       </div>
@@ -620,6 +621,184 @@ function WeekTab({logs,curWI,onUpdate,today,onExport}){
   );
 }
 
+// ═══ CALENDAR TAB ═══
+function CalendarTab({logs,today,onUpdate}){
+  const [calMonth,setCalMonth]=useState(new Date(today.getFullYear(),today.getMonth(),1));
+  const [selDate,setSelDate]=useState(null);
+  const yr=calMonth.getFullYear(),mo=calMonth.getMonth();
+  const firstWeekday=new Date(yr,mo,1).getDay();
+  const daysInMonth=new Date(yr,mo+1,0).getDate();
+  const cells=[];
+  for(let i=0;i<firstWeekday;i++){const d=addDays(new Date(yr,mo,1),-(firstWeekday-i));cells.push({date:d,out:true})}
+  for(let d=1;d<=daysInMonth;d++)cells.push({date:new Date(yr,mo,d),out:false});
+  while(cells.length%7)cells.push({date:addDays(new Date(yr,mo,daysInMonth),cells.length%7),out:true});
+
+  const canPrev=new Date(yr,mo,1)>=new Date(TRAINING_START.getFullYear(),TRAINING_START.getMonth(),1);
+  const canNext=new Date(yr,mo,1)<=new Date(RACE_DATE.getFullYear(),RACE_DATE.getMonth(),1);
+
+  // Monthly stats
+  const monthWeeks=WEEKS.filter(w=>{const ws=weekStartDate(w.idx);return ws.getMonth()===mo&&ws.getFullYear()===yr});
+  let mDone=0,mTotal=0;
+  monthWeeks.forEach(w=>{const wl=logs[w.idx]||{};TASKS.forEach(t=>{if(t.type!=="휴식"&&t.type!=="완전 휴식"){mTotal++;if(wl[t.id]?.done)mDone++}})});
+
+  // Selected date detail
+  const selWI=selDate?dateToWeekIdx(selDate):-1;
+  const selWeek=selWI>=0?WEEKS[selWI]:null;
+  const selLogs=selWI>=0?(logs[selWI]||{}):{};
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      <div style={{display:"flex",alignItems:"center",gap:6}}>
+        <button onClick={()=>canPrev&&setCalMonth(new Date(yr,mo-1,1))} style={{...S.calBtn,opacity:canPrev?1:0.25}}>‹</button>
+        <div style={{flex:1,textAlign:"center"}}>
+          <div style={{color:"var(--color-text-primary,#f1f5f9)",fontSize:17,fontWeight:800}}>{yr}년 {mo+1}월</div>
+          {monthWeeks.length>0&&<div style={{color:"#94a3b8",fontSize:10,marginTop:2}}>완료 {mDone}/{mTotal} · {mTotal>0?Math.round(mDone/mTotal*100):0}%</div>}
+        </div>
+        <button onClick={()=>canNext&&setCalMonth(new Date(yr,mo+1,1))} style={{...S.calBtn,opacity:canNext?1:0.25}}>›</button>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,textAlign:"center"}}>
+        {["일","월","화","수","목","금","토"].map((d,i)=>(
+          <div key={i} style={{fontSize:10,fontWeight:800,padding:"5px 0",color:i===0?"#ef4444":i===6?"#06b6d4":"#64748b"}}>{d}</div>
+        ))}
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
+        {cells.map((c,i)=>{
+          const wi=dateToWeekIdx(c.date);
+          const wl=wi>=0?(logs[wi]||{}):{};
+          const week=wi>=0?WEEKS[wi]:null;
+          const isToday=sameDay(c.date,today);
+          const isRace=sameDay(c.date,RACE_DATE);
+          const isSel=selDate&&sameDay(c.date,selDate);
+          const isSun=c.date.getDay()===0;
+          const isSat=c.date.getDay()===6;
+          // Count done tasks this week for this date's dot
+          const doneTasks=week?TASKS.filter(t=>wl[t.id]?.done):[];
+          const hasDone=doneTasks.length>0;
+          const weekDone=week?TASKS.filter(t=>t.type!=="휴식"&&t.type!=="완전 휴식"&&wl[t.id]?.done).length:0;
+          const weekTotal=week?TASKS.filter(t=>t.type!=="휴식"&&t.type!=="완전 휴식").length:0;
+
+          return (
+            <div key={i} onClick={()=>!c.out&&setSelDate(c.date)} style={{
+              minHeight:50,padding:"3px 2px",borderRadius:5,cursor:c.out?"default":"pointer",
+              background:isSel?"rgba(103,232,249,0.12)":isToday?"rgba(103,232,249,0.06)":"transparent",
+              border:isSel?"1px solid rgba(103,232,249,0.5)":isToday?"1px solid rgba(103,232,249,0.25)":"1px solid rgba(255,255,255,0.03)",
+              opacity:c.out?0.2:1,
+            }}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <span style={{fontSize:11,fontWeight:isToday?900:500,color:isToday?"#67e8f9":isRace?"#f59e0b":isSun?"#ef4444":isSat?"#06b6d4":"#cbd5e1",fontFamily:"ui-monospace,monospace"}}>{c.date.getDate()}</span>
+                {isRace&&<span style={{fontSize:8}}>🏆</span>}
+              </div>
+              {week&&!c.out&&(
+                <div style={{display:"flex",gap:2,marginTop:3,flexWrap:"wrap",justifyContent:"center"}}>
+                  {TASKS.filter(t=>t.type!=="휴식"&&t.type!=="완전 휴식").map(t=>{
+                    const done=wl[t.id]?.done;
+                    // Only show dot for the suggested day or if done
+                    const sugDayMatch = (()=>{
+                      const dow=c.date.getDay(); // 0=Sun
+                      const dayMap={"월":1,"화":2,"수":3,"목":4,"금":5,"토":6,"일":0};
+                      const sugKey=t.sugDay.charAt(0);
+                      return dayMap[sugKey]===dow;
+                    })();
+                    if(!done&&!sugDayMatch) return null;
+                    return (
+                      <div key={t.id} style={{
+                        width:6,height:6,borderRadius:3,
+                        background:done?t.color:"rgba(255,255,255,0.1)",
+                        border:done?"none":`1px solid ${t.color}40`,
+                      }}/>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Legend */}
+      <div style={{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
+        {TASKS.filter(t=>t.type!=="휴식"&&t.type!=="완전 휴식").map(t=>(
+          <div key={t.id} style={{display:"flex",alignItems:"center",gap:3,fontSize:9}}>
+            <div style={{width:6,height:6,borderRadius:3,background:t.color}}/>
+            <span style={{color:"#94a3b8"}}>{t.type.replace("+코어","")}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Selected date detail */}
+      {selDate&&selWeek&&(
+        <div style={{...S.card,borderTop:`2px solid #06b6d4`}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <div>
+              <div style={{color:"#64748b",fontSize:9,fontWeight:800,letterSpacing:"0.08em"}}>{selWeek.name} · {selWeek.phase}</div>
+              <div style={{color:"#f1f5f9",fontSize:15,fontWeight:800,marginTop:2}}>
+                {selDate.getMonth()+1}월 {selDate.getDate()}일 ({["일","월","화","수","목","금","토"][selDate.getDay()]})
+              </div>
+            </div>
+            <button onClick={()=>setSelDate(null)} style={S.calBtn}>✕</button>
+          </div>
+
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {TASKS.map(t=>{
+              const log=selLogs[t.id]||{};
+              const done=log.done;
+              let target="";
+              if(t.field==="recov")target=`${selWeek.recov}km`;
+              else if(t.field==="iKm")target=`${selWeek.interval} · ${selWeek.iKm}km`;
+              else if(t.field==="tempo")target=`${selWeek.tempo}km`;
+              else if(t.field==="longRun")target=`${selWeek.longRun}km`;
+              else if(t.type.indexOf("웨이트")===0)target="런지·불가리안·벤치+코어";
+              else target=t.desc;
+
+              const q=done&&t.hasDist&&(log.distance||log.pace)?getTaskQuality(t,selWeek,log):null;
+              const pace=getPace(t,selWeek);
+
+              return (
+                <div key={t.id} style={{
+                  display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:8,
+                  background:done?"rgba(255,255,255,0.03)":"rgba(255,255,255,0.01)",
+                  borderLeft:`3px solid ${done?t.color:"rgba(255,255,255,0.06)"}`,
+                  opacity:done?1:0.6,
+                }}>
+                  <span style={{fontSize:14}}>{done?"✓":t.icon}</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{display:"flex",alignItems:"center",gap:4}}>
+                      <span style={{color:done?t.color:"#94a3b8",fontSize:12,fontWeight:700}}>{t.type}</span>
+                      <span style={{color:"#475569",fontSize:9}}>{t.sugDay}</span>
+                    </div>
+                    <div style={{color:"#64748b",fontSize:10}}>{target}</div>
+                    {pace&&<div style={{color:t.color,fontSize:9,fontFamily:"ui-monospace,monospace",marginTop:1,opacity:0.8}}>🏁 {pace}</div>}
+                    {done&&log.distance&&<div style={{color:"#94a3b8",fontSize:10,marginTop:2}}>실제: {log.distance}km{log.pace?` · ${log.pace}/km`:""}</div>}
+                    {q&&<div style={{color:q.color,fontSize:9,fontWeight:700,marginTop:1}}>{q.status} {q.pct}% · {q.earned}/{t.weight}pt</div>}
+                    {done&&log.note&&<div style={{color:"#475569",fontSize:9,fontStyle:"italic",marginTop:1}}>"{log.note}"</div>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{marginTop:10,padding:"8px 10px",background:"rgba(255,255,255,0.02)",borderRadius:8,textAlign:"center"}}>
+            <span style={{color:"#64748b",fontSize:10}}>주간 점수: </span>
+            <span style={{color:gradeInfo(weekScore(selWeek,selLogs)).color,fontSize:14,fontWeight:900,fontFamily:"ui-monospace,monospace"}}>
+              {weekScore(selWeek,selLogs)}
+            </span>
+            <span style={{color:"#64748b",fontSize:10}}>/100 · {gradeInfo(weekScore(selWeek,selLogs)).label}</span>
+          </div>
+        </div>
+      )}
+
+      {selDate&&!selWeek&&(
+        <div style={{...S.card,textAlign:"center",padding:20}}>
+          <div style={{color:"#64748b",fontSize:12}}>훈련 기간 밖입니다</div>
+          <div style={{color:"#475569",fontSize:10,marginTop:4}}>훈련 기간: 2026.4.6 ~ 2026.10.18</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ═══ SCORE TAB ═══
 function ScoreTab({logs,curWI,feas}){
   const weeklyData=useMemo(()=>WEEKS.map(w=>{
@@ -728,6 +907,7 @@ const S={
   qInput:{width:"100%",padding:"14px 16px",background:"rgba(255,255,255,0.04)",border:"1.5px solid rgba(255,255,255,0.12)",borderRadius:12,color:"#f1f5f9",fontSize:16,outline:"none",boxSizing:"border-box",fontWeight:600},
   qSaveBtn:{width:"100%",padding:"16px 0",border:"none",borderRadius:14,color:"#fff",fontSize:16,fontWeight:800,cursor:"pointer"},
   qSkipBtn:{width:"100%",padding:"12px 0",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,color:"#94a3b8",fontSize:12,fontWeight:600,cursor:"pointer",marginTop:6},
+  calBtn:{width:34,height:34,borderRadius:9,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.06)",color:"#94a3b8",fontSize:18,cursor:"pointer",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"},
 };
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
